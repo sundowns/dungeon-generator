@@ -7,13 +7,15 @@ RoomTemplate = Class {
         self.left = left
         self.label = love.graphics.newImage(label_path)
     end;
-    getOpenings = function(self)
-        return {
-            top = self.top,
-            right = self.right,
-            bottom = self.bottom,
-            left = self.left
+    getOpenings = function(self, exclusions) --this should probably exist on an actual room instance, not its template
+        if exclusions == nil then exclusions = {} end
+        local openings = {
+            top = self.top and not exclusions.top,
+            right = self.right  and not exclusions.right,
+            bottom = self.bottom and not exclusions.bottom,
+            left = self.left and not exclusions.left
         }
+        return openings
     end;
 }
 

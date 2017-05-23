@@ -7,7 +7,6 @@ DungeonMaster = Class {
         self.grid_width = love.graphics.getWidth()/width
         self.grid_height = love.graphics.getHeight()/height
         self.origin = vector(0,0)
-        self:generate(5)
     end;
     generate = function(self, steps)
         self.world = {}
@@ -19,14 +18,16 @@ DungeonMaster = Class {
         end
         self.currentTile = self.world[love.math.random(self.width/4,self.width-1)][love.math.random(self.height/4,self.height/2-1)]
         self.currentTile:allocate(self.templates['spawn'])
+        local actualSteps = 0
         for i=1,steps do
             local tile_placed = false
             local tries = 0
             local too_many_tries = false
+            local excludingDirections = {top = false, right = false, bottom = false, left = false}
             while not tile_placed and not too_many_tries do
                 tries = tries + 1
                 local decided = false
-                local direction = self:decideWeightedRandom(self.currentTile.template:getOpenings())
+                local direction = self:decideWeightedRandom(self.currentTile.template:getOpenings(excludingDirections))
                 if direction == 'top' then
                     decided = self:selectTile(self.currentTile.x, self.currentTile.y - 1)
                 elseif direction == 'right' then
@@ -37,19 +38,27 @@ DungeonMaster = Class {
                     decided = self:selectTile(self.currentTile.x - 1, self.currentTile.y)
                 end
                 if decided then
-                    print("decided to go " .. direction .. " after " .. tries .. " tries")
-                    self.currentTile:allocate(self.templates[2])
+                    --print("decided to go " .. direction .. " after " .. tries .. " tries")
+                    --TODO: use weighted random selection + constraints to decide which template to allocate
+                    -- Maybe need to create room libraries to quickly return suitable rooms for requirements?
+                    -- Above needs to check neighbours of new tile to decide what openings are appropriate, then compile those templates and do a random selection from them
+                    self.currentTile:allocate(self.templates[1])
+                    excludingDirections = {top = false, right = false, bottom = false, left = false}
                     tile_placed = true
+                    actualSteps = actualSteps + 1
+                elseif direction ~= nil then
+                    --print("excluding " .. direction)
+                    excludingDirections[direction] = true
                 end
                 if tries > 3 then
                     too_many_tries = true
                 end
-                print("tries " .. tries)
             end
             if too_many_tries then
                 --select a new current tile somewhere else connected to the dungeon
             end
         end
+        print("---[Generated world. Attempted " .. steps .. " steps. Allocated " .. actualSteps .. " rooms]")
     end;
     selectTile = function(self, x, y)
         if self.world[x] and self.world[x][y] and not self.world[x][y].occupied then
@@ -83,24 +92,28 @@ DungeonMaster = Class {
         if weightings == nil then
             weightings = {}
             for k,v in pairs(options) do
-                weightings[v] = 1
+                if v == true then weightings[k] = 1 end
             end
         end
         local weightings_sum = 0
         for k,v in pairs(options) do
-            weightings_sum = weightings_sum + weightings[v]
+            if v == true then
+                weightings_sum = weightings_sum + weightings[k]
+            end
         end
         local choice = love.math.random()*weightings_sum
         local decided = false
         local selection = nil
         local running_total = 0
         for k, v in pairs(options) do -- do we need to guarantee this iterates in some particular order?
-            if choice > running_total and choice < running_total + weightings[v] then
-                selection = k
+            if v == true then
+                if choice > running_total and choice < running_total + weightings[k] then
+                    selection = k
+                end
+                running_total = running_total + weightings[k]
             end
-            running_total = running_total + weightings[v]
         end
-        if not selection then print("Made no decision.") else print(selection) end
+        if not selection then print("Made no decision.") end
         return selection
     end;
 }
