@@ -41,3 +41,9 @@ function math.clamp(val, min, max)
     end
     return val
 end
+
+function log(text)
+    if debug then
+        print(text)
+    end
+end
