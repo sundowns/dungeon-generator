@@ -1,0 +1,1 @@
+!!! Pretty sure the weighted random doesnt work properly (i.e. there's a problem with decideWeightedRandom()). seems to ignore weightings set by conditions in weightCandidate()

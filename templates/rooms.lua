@@ -6,16 +6,16 @@ RoomTemplate = Class {
         self.bottom = bottom
         self.left = left
         self.label = love.graphics.newImage(label_path)
+        self.openings = 0
+        self:calculate_openings()
     end;
-    getOpenings = function(self, exclusions) --this should probably exist on an actual room instance, not its template
-        if exclusions == nil then exclusions = {} end
-        local openings = {
-            top = self.top and not exclusions.top,
-            right = self.right  and not exclusions.right,
-            bottom = self.bottom and not exclusions.bottom,
-            left = self.left and not exclusions.left
-        }
-        return openings
+    calculate_openings = function(self)
+        local openings = 0
+        if self.top then openings = openings + 1 end
+        if self.right then openings = openings + 1 end
+        if self.bottom then openings = openings + 1 end
+        if self.left then openings = openings + 1 end
+        self.openings = openings
     end;
 }
 
@@ -41,22 +41,47 @@ TemplateIndex = Class {
         end
         return false
     end;
-    findCandidates = function(self, MustConnectTo, DontConnectTo)
+    findCandidates = function(self, MustConnectTo, DontConnectTo, step)
         local candidates = {}
+        local weightings = {}
         for i, template in ipairs(self.templates) do --only goes over numbered templates (good!)
             local eligible = true
+            for k, _ in pairs(DontConnectTo) do
+                if template[k] == true then eligible = false end
+            end
             for k, _ in pairs(MustConnectTo) do
                 --if the template cant connect to a door that it MUST, its not eligible
                 if template[k] == false then eligible = false end
             end
-            for k, _ in pairs(DontConnectTo) do
-                if template[k] == true then eligible = false end
-            end
+
             if eligible then
                 candidates[i] = true
+                weightings[i] = self:weightCandidate(step, template)
             end
         end
         return candidates
+    end;
+    weightCandidate = function(self, step, template)
+        if step <= GENERATION_STEPS*0.2 then --first 20% of generation
+            log("0 -> 20")
+            if template.openings == 1 then
+                return 0
+            else return template.openings/4 end --more openings = higher weight
+        elseif step < GENERATION_STEPS*0.5 then -- 20% -> 49%
+            log("20 -> 49")
+            return 1 -- all equal weightings
+        elseif step < GENERATION_STEPS*0.8 then -- 50% -> 79%
+            log("50 -> 79")
+            return 1/(template.openings/4) -- less openings = better
+        else --80% -> 100%
+            log("80 -> 100")
+            -- less openings = much better
+            if template.openings == 4 then
+                return 0
+            else
+                return 1/(template.openings/4)
+            end
+        end
     end;
 }
 

@@ -20,7 +20,7 @@ DungeonMaster = Class {
             end
         end
         self.currentTile = self.world[love.math.random(self.width/4,self.width-1)][love.math.random(self.height/4,self.height/2-1)]
-        self:allocateTemplateToTile(self.currentTile.x, self.currentTile.y, self.templateIndex:get('spawn'))
+        self:allocateTemplateToTile(self.currentTile.x, self.currentTile.y, self.templateIndex:get('spawn'), nil, 0)
         local actualSteps = 0
         for i=1,steps do
             local tile_placed = false
@@ -30,7 +30,7 @@ DungeonMaster = Class {
             while not tile_placed and not too_many_tries do
                 tries = tries + 1
                 local decided = false
-                local direction = self:decideWeightedRandom(self.currentTile.template:getOpenings(excludingDirections))
+                local direction = self:decideWeightedRandom(self.currentTile:getOpenings(excludingDirections))
                 if direction == 'top' then
                     decided = self:selectTile(self.currentTile.x, self.currentTile.y - 1)
                 elseif direction == 'right' then
@@ -42,8 +42,8 @@ DungeonMaster = Class {
                 end
                 if decided then
                     local selectedX, selectedY = self.currentTile:getCoords()
-                    local template = self:chooseTemplate(selectedX, selectedY, self:opposite(direction))
-                    self:allocateTemplateToTile(self.currentTile.x, self.currentTile.y, template, self:opposite(direction))
+                    local template = self:chooseTemplate(selectedX, selectedY, self:opposite(direction), i)
+                    self:allocateTemplateToTile(self.currentTile.x, self.currentTile.y, template, self:opposite(direction), i)
                     excludingDirections = {top = false, right = false, bottom = false, left = false}
                     tile_placed = true
                     actualSteps = actualSteps + 1
@@ -101,12 +101,17 @@ DungeonMaster = Class {
                 if self.world[i][j].occupied then
                     love.graphics.setColor(150,150,150,200)
                     love.graphics.rectangle('fill', self.origin.x + (i-1)*self.grid_width, self.origin.y + (j-1)*self.grid_height, self.grid_width, self.grid_height)
-                    love.graphics.setColor(255,255,255)
+
                     love.graphics.draw(self.world[i][j].template.label, self.origin.x + (i-1)*self.grid_width,
                         self.origin.y + (j-1)*self.grid_height, 0, self.grid_width/self.world[i][j].template.label:getWidth(),
                         self.grid_height/self.world[i][j].template.label:getHeight()
                     )
-                    --love.graphics.draw(drawable (Drawable), x (number), y (number), r (number), sx (number), sy (number), ox (number), oy (number), kx (number), ky (number))
+
+                    if debug then
+                        love.graphics.setColor(100 + self.world[i][j].allocatedOnStep/GENERATION_STEPS*150, 255 - self.world[i][j].allocatedOnStep/GENERATION_STEPS*255, 0, 255)
+                        love.graphics.print(self.world[i][j].allocatedOnStep, self.origin.x + (i-1)*self.grid_width, self.origin.y + (j-1)*self.grid_height)
+                        love.graphics.setColor(255,255,255,255)
+                    end
                 else
                     love.graphics.setColor(40,0,0,255)
                     love.graphics.rectangle('fill', self.origin.x + (i-1)*self.grid_width, self.origin.y + (j-1)*self.grid_height, self.grid_width, self.grid_height)
@@ -142,7 +147,7 @@ DungeonMaster = Class {
         if not selection then log("Made no decision.") end
         return selection
     end;
-    chooseTemplate = function(self, forX, forY, from)
+    chooseTemplate = function(self, forX, forY, from, step)
         local MustConnectTo = {}
         MustConnectTo[from] = true
         local DontConnectTo = {}
@@ -174,13 +179,13 @@ DungeonMaster = Class {
             if not from == "top" then DontConnectTo["top"] = true end
         end
 
-        local candidates = self.templateIndex:findCandidates(MustConnectTo, DontConnectTo)
-        local selection = self:decideWeightedRandom(candidates)
+        local candidates, weightings = self.templateIndex:findCandidates(MustConnectTo, DontConnectTo, step)
+        local selection = self:decideWeightedRandom(candidates, weightings)
         return self.templateIndex:get(selection)
     end;
-    allocateTemplateToTile = function(self, x, y, template, from)
+    allocateTemplateToTile = function(self, x, y, template, from, step)
         if self.world[x][y] ~= nil then
-            local isUnresolved = self.world[x][y]:allocate(template, from)
+            local isUnresolved = self.world[x][y]:allocate(template, from, step)
             if isUnresolved then
                 self.unresolvedTiles[#self.unresolvedTiles + 1] = {x = x, y = y}
             end
@@ -211,9 +216,11 @@ GridTile = Class {
         --local randyNum = love.math.random(0, 10)
         self.occupied = false --randyNum%2 == 0
         self.openings = {}
+        self.allocatedOnStep = 0
     end;
-    allocate = function(self, template, from)
+    allocate = function(self, template, from, step)
         self.occupied = true
+        self.allocatedOnStep = step
         self.template = template
         self.openings = {
             top = self.template.top,
@@ -226,5 +233,15 @@ GridTile = Class {
     end;
     getCoords = function(self)
         return self.x, self.y
+    end;
+    getOpenings = function(self, exclusions) --this should probably exist on an actual room instance, not its template
+        if exclusions == nil then exclusions = {} end
+        local openings = {
+            top = self.openings.top and not exclusions.top,
+            right = self.openings.right  and not exclusions.right,
+            bottom = self.openings.bottom and not exclusions.bottom,
+            left = self.openings.left and not exclusions.left
+        }
+        return openings
     end;
 }
